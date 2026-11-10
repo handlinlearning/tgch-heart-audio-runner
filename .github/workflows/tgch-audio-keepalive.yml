@@ -1,0 +1,30 @@
+name: TGCH — keep Heart daily schedule active
+
+on:
+  # GitHub disables public-repo scheduled workflows after 60 days of inactivity.
+  # One safe maintenance commit every month keeps the dedicated audio repository active.
+  schedule:
+    - cron: '12 12 1 * *'
+      timezone: "America/Chicago"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  preserve-schedule:
+    if: github.repository == 'handlinlearning/tgch-heart-audio-runner' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record monthly maintenance heartbeat
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          printf 'TGCH Heart public audio runner maintenance: %s UTC\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > .tgch-heart-schedule-heartbeat
+          git add .tgch-heart-schedule-heartbeat
+          git commit -m "Maintenance: keep TGCH daily Heart recording schedule active"
+          git push origin HEAD:main

@@ -1,0 +1,52 @@
+name: TGCH — Heart daily MP3 from verified original
+
+on:
+  # The workflow file itself triggers the first run on installation.
+  # Ordinary code commits do not rerun audio.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tgch-heart-daily-audio.yml'
+  schedule:
+    # 4:35 AM CST / 5:35 AM CDT, after TGCH's existing 3 AM and 4 AM tasks.
+    - cron: '35 10 * * *'
+  workflow_dispatch:
+    inputs:
+      devotional_date:
+        description: 'Optional YYYY-MM-DD to record an earlier verified original'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: tgch-heart-mp3
+  cancel-in-progress: false
+
+jobs:
+  heart:
+    name: Generate one verified Heart MP3
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install free Kokoro model dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq espeak-ng ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install 'kokoro==0.9.4' 'soundfile==0.13.1' 'numpy==1.26.4'
+      - name: Read original, synthesize Heart, publish hash-verified MP3
+        env:
+          TGCH_RUN_DATE: ${{ inputs.devotional_date }}
+        run: |
+          if [ -n "$TGCH_RUN_DATE" ]; then
+            python scripts/tgch_heart_daily_mp3.py --date "$TGCH_RUN_DATE"
+          else
+            python scripts/tgch_heart_daily_mp3.py
+          fi

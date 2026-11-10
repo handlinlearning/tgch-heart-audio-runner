@@ -1,15 +1,11 @@
 name: TGCH — Heart daily MP3 from verified original
 
 on:
-  # The workflow file itself triggers the first run on installation.
-  # Ordinary code commits do not rerun audio.
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/tgch-heart-daily-audio.yml'
   schedule:
-    # 4:35 AM CST / 5:35 AM CDT, after TGCH's existing 3 AM and 4 AM tasks.
-    - cron: '35 10 * * *'
+    - cron: '35 4 * * *'
+      timezone: "America/Chicago"
+    - cron: '35 5 * * *'
+      timezone: "America/Chicago"
   workflow_dispatch:
     inputs:
       devotional_date:
@@ -35,13 +31,53 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Check verified original and whether audio is already recorded
+        id: ready
+        env:
+          TGCH_RUN_DATE: ${{ inputs.devotional_date }}
+        run: |
+          python - <<'PY'
+          import datetime,hashlib,json,os,re
+          from urllib.request import urlopen
+          from urllib.error import HTTPError
+          from zoneinfo import ZoneInfo
+          date=os.environ.get("TGCH_RUN_DATE") or datetime.datetime.now(ZoneInfo("America/Chicago")).date().isoformat()
+          if not re.fullmatch("[0-9]{4}-[0-9]{2}-[0-9]{2}",date): raise SystemExit("Invalid devotional date")
+          base="https://qgxoombbfmimpbcollhi.supabase.co/functions/v1/"
+          def get(path):
+              with urlopen(base+path,timeout=45) as response: return json.load(response)
+          record=False
+          try: doc=get("tgch-devotionals?date="+date)
+          except HTTPError as exc:
+              if exc.code!=404: raise
+              print("No approved original for",date,"— safely skipping")
+          else:
+              md=doc.get("markdown")
+              sha=doc.get("sha256")
+              if (doc.get("date")!=date or not isinstance(md,str) or
+                  not isinstance(sha,str) or not re.fullmatch("[0-9a-f]{64}",sha) or
+                  hashlib.sha256(md.encode("utf-8")).hexdigest()!=sha):
+                  raise SystemExit("The original's full SHA-256 is invalid")
+              state=get("tgch-heart-audio?date="+date)
+              if state.get("available"):
+                  if state.get("voice")!="af_heart" or state.get("source_sha256")!=sha:
+                      raise SystemExit("Existing recording differs from the original")
+                  print("Heart MP3 already source-verified for",date)
+              else:
+                  print("Heart MP3 needed for",date)
+                  record=True
+          with open(os.environ["GITHUB_OUTPUT"],"a") as output:
+              output.write("needs_audio="+str(record).lower()+"\n")
+          PY
       - name: Install free Kokoro model dependencies
+        if: steps.ready.outputs.needs_audio == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq espeak-ng ffmpeg
           python -m pip install --upgrade pip
           python -m pip install 'kokoro==0.9.4' 'soundfile==0.13.1' 'numpy==1.26.4'
       - name: Read original, synthesize Heart, publish hash-verified MP3
+        if: steps.ready.outputs.needs_audio == 'true'
         env:
           TGCH_RUN_DATE: ${{ inputs.devotional_date }}
         run: |

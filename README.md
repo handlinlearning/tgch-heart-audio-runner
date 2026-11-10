@@ -24,8 +24,9 @@ or enter e.g. `2026-11-10` to backfill a specific date.
 
 ### Schedule
 
-10:35 UTC daily (4:35 AM CST / 5:35 AM CDT). GitHub scheduled jobs can be
-delayed. If no verified original exists, the job skips without creating content.
+4:35 AM America/Chicago daily, including daylight saving time. A 5:35 AM
+catch-up check handles delayed publishing. A quick preflight skips installing
+Kokoro when the recording already exists. GitHub scheduled jobs can be delayed. If no verified original exists, the job skips without creating content.
 
 ### Important notes
 

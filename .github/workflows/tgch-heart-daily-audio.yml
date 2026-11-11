@@ -6,6 +6,12 @@ on:
       timezone: "America/Chicago"
     - cron: '35 5 * * *'
       timezone: "America/Chicago"
+  # Archive backfill fires once when this approved workflow file changes.
+  # Same workflow identity preserves the verified OIDC upload security checks.
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tgch-heart-daily-audio.yml
   workflow_dispatch:
     inputs:
       devotional_date:
@@ -23,6 +29,7 @@ concurrency:
 
 jobs:
   heart:
+    if: github.event_name != 'push'
     name: Generate one verified Heart MP3
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -86,3 +93,66 @@ jobs:
           else
             python scripts/tgch_heart_daily_mp3.py
           fi
+
+  backfill:
+    name: Restore archived Heart reading for ${{ matrix.devotional_date }}
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        devotional_date:
+          - '2026-11-01'
+          - '2026-11-02'
+          - '2026-11-03'
+          - '2026-11-05'
+          - '2026-11-06'
+          - '2026-11-07'
+          - '2026-11-09'
+    steps:
+      - name: Check out locked public Heart runner
+        uses: actions/checkout@v4
+      - name: Use Python 3.11 for verified Kokoro
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify this archival date still needs recording
+        id: ready
+        env:
+          TGCH_ARCHIVE_DATE: ${{ matrix.devotional_date }}
+        run: |
+          python - <<'PY'
+          import json,os,hashlib
+          from urllib.request import urlopen
+          date=os.environ['TGCH_ARCHIVE_DATE']
+          base='https://qgxoombbfmimpbcollhi.supabase.co/functions/v1/'
+          with urlopen(base+'tgch-devotionals?date='+date,timeout=50) as r:
+              source=json.load(r)
+          with urlopen(base+'tgch-heart-audio?date='+date,timeout=50) as r:
+              audio=json.load(r)
+          md=source.get('markdown')
+          sha=source.get('sha256')
+          if source.get('date')!=date or not isinstance(md,str) or not isinstance(sha,str) or len(sha)!=64 or hashlib.sha256(md.encode('utf-8')).hexdigest()!=sha:
+              raise SystemExit('TGCH archival source integrity verification failed')
+          needed=not audio.get('available',False)
+          if not needed and (audio.get('source_sha256')!=sha or audio.get('voice')!='af_heart'):
+              raise SystemExit('Existing audio conflicts with approved original; refusing replacement')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out:
+              out.write('needs_audio='+str(needed).lower()+'\n')
+          print('TGCH',date,'needs archived Heart MP3:',needed)
+          PY
+      - name: Install approved Heart synthesis dependencies once for this date
+        if: steps.ready.outputs.needs_audio == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq espeak-ng ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install 'kokoro==0.9.4' 'soundfile==0.13.1' 'numpy==1.26.4'
+      - name: Narrate, publish, and post-check exact original archive entry
+        if: steps.ready.outputs.needs_audio == 'true'
+        env:
+          TGCH_ARCHIVE_DATE: ${{ matrix.devotional_date }}
+        run: |
+          python scripts/tgch_heart_daily_mp3.py --date "$TGCH_ARCHIVE_DATE"

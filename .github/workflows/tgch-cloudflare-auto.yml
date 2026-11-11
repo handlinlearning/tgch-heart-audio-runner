@@ -14,7 +14,7 @@ on:
         type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: tgch-cloudflare-pages-production
@@ -63,7 +63,9 @@ jobs:
           set -euo pipefail
           sha="$(git -C tgch-source rev-parse HEAD)"
           echo "source_sha=$sha" >> "$GITHUB_OUTPUT"
-          old="$(cat runner/.tgch-cloudflare-last-deployed 2>/dev/null || true)"
+          # Compare against the release marker served by the existing production domain.
+          # No public-repo write permission or persistent private source state required.
+          old="$(curl --fail --silent --show-error --max-time 12 --retry 1 "https://thegratefulcatholicheart.com/tgch-release-sha.txt" 2>/dev/null || true)"
           if [[ "$old" == "$sha" && "$FORCE_DEPLOY" != "true" ]]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "TGCH source unchanged; no new production deployment."
@@ -118,19 +120,8 @@ jobs:
           SOURCE_SHA: ${{ steps.compare.outputs.source_sha }}
         run: |
           python3 runner/scripts/tgch-pages-smoke.py --url "https://thegratefulcatholicheart.com" --source-sha "$SOURCE_SHA" --target production
-      - name: Remember only the successfully verified source commit
+      - name: Report successful production verification
         if: steps.compare.outputs.changed == 'true'
-        working-directory: runner
         env:
           SOURCE_SHA: ${{ steps.compare.outputs.source_sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          printf '%s\n' "$SOURCE_SHA" > .tgch-cloudflare-last-deployed
-          git add .tgch-cloudflare-last-deployed
-          git commit -m "TGCH: verified Cloudflare release $SOURCE_SHA"
-          git pull --rebase origin main
-          git push origin HEAD:main
-          echo "TGCH production verified; private source SHA $SOURCE_SHA"
+        run: echo "TGCH production verified from private source SHA ${SOURCE_SHA}"

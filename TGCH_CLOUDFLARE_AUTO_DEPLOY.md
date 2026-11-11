@@ -27,8 +27,8 @@ use these credentials. No `pull_request` execution or artifact upload.
 ## Operation
 
 The workflow `TGCH — automatic Cloudflare Pages (private source)` checks
-the private `main` branch about every 15 minutes. If there is no new commit
-and a previous run completed, it makes **no deployment**.
+the private `main` branch about every 15 minutes. If the production deployment marker already matches the approved source SHA,
+it makes **no deployment**.
 
 For changed source, it:
 1. Fetches the private source with read-only credentials.
@@ -39,10 +39,10 @@ For changed source, it:
 5. Checks the preview release marker and essential pages.
 6. Deploys to **production** of the existing project, with no DNS changes.
 7. Checks the production release marker and essential pages.
-8. Records only the **source commit SHA** in this public runner.
+8. Confirms the private source SHA matches the marker on the **existing live site**.
    No private source code/artifacts are committed or exposed here.
 
-If any check fails, the workflow stops and does not record a successful
+If any check fails, the workflow stops without confirming a successful
 deployment. Preview verification is mandatory before production.
 
 **Run the first deployment:** GitHub → Actions → `TGCH — automatic

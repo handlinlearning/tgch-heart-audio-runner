@@ -1,0 +1,136 @@
+name: TGCH — automatic Cloudflare Pages (private source)
+
+on:
+  # The public runner has free standard GitHub-hosted minutes.
+  # Poll private source; no private-repository GitHub Actions minutes required.
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: 'Redeploy unchanged, approved main commit'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tgch-cloudflare-pages-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'handlinlearning/tgch-heart-audio-runner' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout public runner only
+        uses: actions/checkout@v4
+        with:
+          path: runner
+      - name: Check that the three deployment secrets are configured
+        id: configured
+        shell: bash
+        env:
+          TGCH_SOURCE_READ_TOKEN: ${{ secrets.TGCH_SOURCE_READ_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$TGCH_SOURCE_READ_TOKEN" ] || [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::TGCH Cloudflare automation is installed but waiting for three secure GitHub Actions secrets."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Checkout private, approved TGCH main source
+        if: steps.configured.outputs.ready == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: handlinlearning/the-grateful-catholic-heart
+          ref: main
+          token: ${{ secrets.TGCH_SOURCE_READ_TOKEN }}
+          path: tgch-source
+          persist-credentials: false
+      - name: Compare approved source against last successful Cloudflare deploy
+        if: steps.configured.outputs.ready == 'true'
+        id: compare
+        shell: bash
+        env:
+          FORCE_DEPLOY: ${{ inputs.force_deploy }}
+        run: |
+          set -euo pipefail
+          sha="$(git -C tgch-source rev-parse HEAD)"
+          echo "source_sha=$sha" >> "$GITHUB_OUTPUT"
+          old="$(cat runner/.tgch-cloudflare-last-deployed 2>/dev/null || true)"
+          if [[ "$old" == "$sha" && "$FORCE_DEPLOY" != "true" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "TGCH source unchanged; no new production deployment."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Deploying verified TGCH source commit: $sha"
+          fi
+      - name: Validate site and locked originals
+        if: steps.compare.outputs.changed == 'true'
+        run: node runner/scripts/tgch-site-release-qa.mjs tgch-source/site
+      - name: Include exact approved homepage artwork (integrity checked)
+        if: steps.compare.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 --output tgch-source/site/assets/tgch-approved-homepage.png "https://v3b.fal.media/files/b/0ab0ec11/_N0aakkNp5sfog4-irWXd_Unknown-105.png"
+          echo "cd0108982fc9a4abba46eac47976b2693c03d71c962eb7b370921121b2443b95  tgch-source/site/assets/tgch-approved-homepage.png" | sha256sum --check
+      - name: Attach non-secret release marker for Cloudflare smoke tests
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          SOURCE_SHA: ${{ steps.compare.outputs.source_sha }}
+        shell: bash
+        run: printf '%s\n' "$SOURCE_SHA" > tgch-source/site/tgch-release-sha.txt
+      - name: Deploy to a non-production Cloudflare preview
+        if: steps.compare.outputs.changed == 'true'
+        id: preview
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.136.3'
+          command: pages deploy tgch-source/site --project-name=the-grateful-catholic-heart --branch=tgch-ci-preview --commit-hash=${{ steps.compare.outputs.source_sha }}
+      - name: Verify actual Cloudflare preview before touching production
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.deployment-url }}
+          SOURCE_SHA: ${{ steps.compare.outputs.source_sha }}
+        run: |
+          python3 runner/scripts/tgch-pages-smoke.py --url "$PREVIEW_URL" --source-sha "$SOURCE_SHA" --target preview
+      - name: Publish same approved files to the existing TGCH production Pages project
+        if: steps.compare.outputs.changed == 'true'
+        id: production
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4.136.3'
+          command: pages deploy tgch-source/site --project-name=the-grateful-catholic-heart --branch=main --commit-hash=${{ steps.compare.outputs.source_sha }}
+      - name: Confirm the existing TGCH domain is serving this exact release
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          SOURCE_SHA: ${{ steps.compare.outputs.source_sha }}
+        run: |
+          python3 runner/scripts/tgch-pages-smoke.py --url "https://thegratefulcatholicheart.com" --source-sha "$SOURCE_SHA" --target production
+      - name: Remember only the successfully verified source commit
+        if: steps.compare.outputs.changed == 'true'
+        working-directory: runner
+        env:
+          SOURCE_SHA: ${{ steps.compare.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf '%s\n' "$SOURCE_SHA" > .tgch-cloudflare-last-deployed
+          git add .tgch-cloudflare-last-deployed
+          git commit -m "TGCH: verified Cloudflare release $SOURCE_SHA"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "TGCH production verified; private source SHA $SOURCE_SHA"

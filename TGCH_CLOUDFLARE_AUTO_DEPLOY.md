@@ -26,7 +26,7 @@ use these credentials. No `pull_request` execution or artifact upload.
 
 ## Operation
 
-The workflow `TGCH — automatic Cloudflare Pages (private source)` checks
+The **first** release must be started manually through GitHub Actions after the three secrets are saved. The scheduled job will not deploy to an uninitialized website without a release marker. After the first verified manual release, the workflow `TGCH — automatic Cloudflare Pages (private source)` checks
 the private `main` branch about every 15 minutes. If the production deployment marker already matches the approved source SHA,
 it makes **no deployment**.
 

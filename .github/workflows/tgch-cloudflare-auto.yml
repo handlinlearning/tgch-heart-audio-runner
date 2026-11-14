@@ -66,7 +66,14 @@ jobs:
           # Compare against the release marker served by the existing production domain.
           # No public-repo write permission or persistent private source state required.
           old="$(curl --fail --silent --show-error --max-time 12 --retry 1 "https://thegratefulcatholicheart.com/tgch-release-sha.txt" 2>/dev/null || true)"
-          if [[ "$old" == "$sha" && "$FORCE_DEPLOY" != "true" ]]; then
+          # NO-DRIFT RELEASE GATE: do not let a schedule deploy for the first
+          # time as soon as credentials are added. A user manually starts and
+          # verifies the first release. Scheduled deploys begin only after
+          # that release marker exists on the live domain.
+          if [[ -z "$old" && "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::First Cloudflare deployment requires a manual workflow_dispatch run."
+          elif [[ "$old" == "$sha" && "$FORCE_DEPLOY" != "true" ]]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "TGCH source unchanged; no new production deployment."
           else

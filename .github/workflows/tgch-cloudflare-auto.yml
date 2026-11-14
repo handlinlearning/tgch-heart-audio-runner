@@ -5,6 +5,11 @@ on:
   # Poll private source; no private-repository GitHub Actions minutes required.
   schedule:
     - cron: '7,22,37,52 * * * *'
+  # One-time user-authorized QA deployment trigger; remove after verified.
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tgch-cloudflare-auto.yml
   workflow_dispatch:
     inputs:
       force_deploy:

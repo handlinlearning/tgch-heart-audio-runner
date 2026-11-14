@@ -9,7 +9,7 @@ const root=resolve(process.argv[2]||"tgch-source/site");
 const required=[
  "index.html","styles.css","app.js","tgch-sw.js",
  "tgch-config.js","tgch-formation-2026-2027.json",
- "a-little-something-extra.html","a-little-something-extra.js",
+ "a-little-something-extra.html","a-little-something-extra.js","tgch-extra-delivery.js",
  "tgch-recorded-player.js","manifest.webmanifest",
  "assets/tgch-logo.png","assets/tgch-v4/crest-official.webp",
  "assets/tgch-v4/hero-reference-rebuilt.webp"
@@ -36,6 +36,12 @@ const app=readFileSync(join(root,"app.js"),"utf8");
 assert(index.includes('id="bellDialog"')&&index.includes('id="heartAudioAlerts"'),"Prayer Bell / optional audio settings");
 assert(index.includes("One Heart. One Prayer. One Day at a Time."),"approved TGCH identity");
 assert(extra.includes("tgch-recorded-player.js")&&extra.includes('id="tgchRecordedAudio"'),"Heart player missing");
+assert(extra.includes('id="extraPushEnable"')&&extra.includes('id="extraShare"')&&
+ extra.includes("tgch-extra-delivery.js"),"separate Extra phone delivery and share UI missing");
+const extraDelivery=readFileSync(join(root,"tgch-extra-delivery.js"),"utf8");
+assert(extraDelivery.includes("tgch-extra-device")&&
+ extraDelivery.includes("tgch:original:verified")&&extraDelivery.includes('request("disable"'),
+ "Extra delivery must be opt-in, reference exact published date and support disabling");
 assert(app.includes("register-tgch-device")&&app.includes("audio_notifications_enabled"),"notification opt-in missing");
 const cfg=readFileSync(join(root,"tgch-config.js"),"utf8");
 assert(!/SUPABASE_SERVICE_ROLE_KEY|CLOUDFLARE_API_TOKEN|TGCH_SOURCE_READ_TOKEN/.test(cfg),"secret-like config reference");

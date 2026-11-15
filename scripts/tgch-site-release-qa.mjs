@@ -17,7 +17,7 @@ const required=[
 // The approved original formation and exact-original renderer/service worker are locked.
 const locked={
  "tgch-formation-2026-2027.json":"a0da0e7c622ef1e6083a012dae4c5bff340686b9",
- "a-little-something-extra.js":"218a57725b244078d513b43247d201ea5489a1c6",
+ "a-little-something-extra.js":"5f6c26a71f4ee51730daeac86255b518f7c09cd7",
  "tgch-sw.js":"976cb608a0fbd01b9c5be7db8d09e981c2d57847"
 };
 const assert=(ok,msg)=>{if(!ok)throw new Error("TGCH QA: "+msg);};
@@ -36,9 +36,16 @@ const app=readFileSync(join(root,"app.js"),"utf8");
 assert(index.includes('id="bellDialog"')&&index.includes('id="heartAudioAlerts"'),"Prayer Bell / optional audio settings");
 assert(index.includes("One Heart. One Prayer. One Day at a Time."),"approved TGCH identity");
 assert(extra.includes("tgch-recorded-player.js")&&extra.includes('id="tgchRecordedAudio"'),"Heart player missing");
-assert(extra.includes('id="tgchSundayCompanion"')&&extra.includes('id="tgchSundayCorrection"')&&extra.includes('tgch-sunday-companion.js'),"Sunday official readings companion / correction missing");
+assert(extra.includes('id="tgchSundayCompanion"')&&extra.includes('tgch-sunday-companion.js')&&
+ !extra.includes("tgchSundayCorrection"),"Sunday readings-only companion / no correction notices");
 const sunday=readFileSync(join(root,"tgch-sunday-companion.js"),"utf8");
-assert(sunday.includes("bible.usccb.org")&&sunday.includes("Matthew 25:14–30")&&sunday.includes("Luke 21:5–19")&&sunday.includes("tgch:original:verified"),"Sunday Gospel correction or verified calendar missing");
+const reader=readFileSync(join(root,"a-little-something-extra.js"),"utf8");
+assert(sunday.includes("bible.usccb.org")&&sunday.includes("Matthew 25:14–30")&&
+ sunday.includes("tgch:sunday:selected")&&!sunday.includes("Luke 21:5–19")&&
+ !sunday.includes("correction"),"Sunday references and readings-only presentation");
+assert(reader.includes("showSundayOnly")&&reader.includes("if(showSundayOnly(date))return;")&&
+ reader.includes("originalArea.hidden=true")&&reader.includes("tgch:sunday:selected"),"Sunday must never display generated original");
+assert(extra.includes("tgch-extra-delivery.js?v=2"),"Updated Sunday sharing handler missing");
 assert(extra.includes('id="extraPushEnable"')&&extra.includes('id="extraShare"')&&
  extra.includes("tgch-extra-delivery.js"),"separate Extra phone delivery and share UI missing");
 const extraDelivery=readFileSync(join(root,"tgch-extra-delivery.js"),"utf8");

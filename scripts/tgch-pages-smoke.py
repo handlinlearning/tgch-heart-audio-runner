@@ -37,6 +37,7 @@ archive=get("/a-little-something-extra.html")
 sw=get("/tgch-sw.js")
 player=get("/tgch-recorded-player.js")
 extra_delivery=get("/tgch-extra-delivery.js")
+reader=get("/a-little-something-extra.js")
 sunday=get("/tgch-sunday-companion.js")
 if not ("The Grateful Catholic Heart" in home and "heartAudioAlerts" in home):
  raise SystemExit("TGCH QA: homepage or audio alert checkbox missing")
@@ -47,10 +48,17 @@ if not ('id="extraPushEnable"' in archive and 'id="extraShare"' in archive and
  raise SystemExit("TGCH QA: separate daily phone subscribe/share controls missing")
 if not ("tgch-extra-device" in extra_delivery and "tgch:original:verified" in extra_delivery):
  raise SystemExit("TGCH QA: daily phone subscription and verified sharing code missing")
-if not ('id="tgchSundayCompanion"' in archive and 'id="tgchSundayCorrection"' in archive and "tgch-sunday-companion.js" in archive):
- raise SystemExit("TGCH QA: the separate Sunday readings / correction panel is missing")
-if not ("bible.usccb.org" in sunday and "Matthew 25:14" in sunday and "Luke 21:5" in sunday):
- raise SystemExit("TGCH QA: official Lectionary link or November 15 correction missing")
+if not ('id="tgchSundayCompanion"' in archive and "tgch-sunday-companion.js?v=2" in archive and
+        'id="tgchSundayCorrection"' not in archive and "tgch-extra-delivery.js?v=2" in archive):
+ raise SystemExit("TGCH QA: Sunday readings-only page must contain no correction notices")
+if not ("bible.usccb.org" in sunday and "Matthew 25:14" in sunday and
+        "tgch:sunday:selected" in sunday and "Luke 21:5" not in sunday and "correction" not in sunday):
+ raise SystemExit("TGCH QA: Sunday must use official reading references, not correction displays")
+if not ("if(showSundayOnly(date))return;" in reader and "originalArea.hidden=true" in reader and
+        "tgch:sunday:selected" in reader):
+ raise SystemExit("TGCH QA: generated Sunday original must be hidden from public site")
+if not ('sundaySelected?"#tgchSundayCompanion":"#listen"' in extra_delivery):
+ raise SystemExit("TGCH QA: Sunday sharing must link to the readings, not original audio")
 if not ("showNotification" in sw and "notificationclick" in sw):
  raise SystemExit("TGCH QA: Prayer Bell push service worker missing")
 if not ("af_heart" in player and "tgch-heart-audio" in player):

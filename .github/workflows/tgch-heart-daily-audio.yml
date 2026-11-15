@@ -4,7 +4,11 @@ on:
   schedule:
     - cron: '35 4 * * *'
       timezone: "America/Chicago"
-    - cron: '35 5 * * *'
+    # Several inexpensive, idempotent checks tolerate delayed capture and
+    # GitHub schedule jitter. Kokoro only runs when a new verified original exists.
+    - cron: '5,35 5 * * *'
+      timezone: "America/Chicago"
+    - cron: '10 6,7,9,12 * * *'
       timezone: "America/Chicago"
   # Archive backfill fires once when this approved workflow file changes.
   # Same workflow identity preserves the verified OIDC upload security checks.
@@ -18,6 +22,11 @@ on:
         description: 'Optional YYYY-MM-DD to record an earlier verified original'
         required: false
         type: string
+      restore_archived_recordings:
+        description: 'Explicitly recheck the locked list of older originals'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -29,7 +38,9 @@ concurrency:
 
 jobs:
   heart:
-    if: github.event_name != 'push'
+    # A controlled workflow-file update also checks and records today's original.
+    # Existing recorded dates pass the SHA gate and cannot be regenerated.
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
     name: Generate one verified Heart MP3
     runs-on: ubuntu-latest
     timeout-minutes: 50
@@ -96,7 +107,8 @@ jobs:
 
   backfill:
     name: Restore archived Heart reading for ${{ matrix.devotional_date }}
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Backfill is opt-in; routine scheduling fixes must not launch seven archive jobs.
+    if: github.event_name == 'workflow_dispatch' && inputs.restore_archived_recordings == true && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:

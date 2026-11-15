@@ -9,7 +9,7 @@ const root=resolve(process.argv[2]||"tgch-source/site");
 const required=[
  "index.html","styles.css","app.js","tgch-sw.js",
  "tgch-config.js","tgch-formation-2026-2027.json",
- "a-little-something-extra.html","a-little-something-extra.js","tgch-extra-delivery.js",
+ "a-little-something-extra.html","a-little-something-extra.js","tgch-extra-delivery.js","tgch-sunday-companion.js",
  "tgch-recorded-player.js","manifest.webmanifest",
  "assets/tgch-logo.png","assets/tgch-v4/crest-official.webp",
  "assets/tgch-v4/hero-reference-rebuilt.webp"
@@ -36,6 +36,9 @@ const app=readFileSync(join(root,"app.js"),"utf8");
 assert(index.includes('id="bellDialog"')&&index.includes('id="heartAudioAlerts"'),"Prayer Bell / optional audio settings");
 assert(index.includes("One Heart. One Prayer. One Day at a Time."),"approved TGCH identity");
 assert(extra.includes("tgch-recorded-player.js")&&extra.includes('id="tgchRecordedAudio"'),"Heart player missing");
+assert(extra.includes('id="tgchSundayCompanion"')&&extra.includes('id="tgchSundayCorrection"')&&extra.includes('tgch-sunday-companion.js'),"Sunday official readings companion / correction missing");
+const sunday=readFileSync(join(root,"tgch-sunday-companion.js"),"utf8");
+assert(sunday.includes("bible.usccb.org")&&sunday.includes("Matthew 25:14–30")&&sunday.includes("Luke 21:5–19")&&sunday.includes("tgch:original:verified"),"Sunday Gospel correction or verified calendar missing");
 assert(extra.includes('id="extraPushEnable"')&&extra.includes('id="extraShare"')&&
  extra.includes("tgch-extra-delivery.js"),"separate Extra phone delivery and share UI missing");
 const extraDelivery=readFileSync(join(root,"tgch-extra-delivery.js"),"utf8");

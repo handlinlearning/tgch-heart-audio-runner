@@ -4,11 +4,12 @@ on:
   schedule:
     - cron: '35 4 * * *'
       timezone: "America/Chicago"
+    # Additional afternoon/evening recovery checks ensure late captures are retried.
     # Several inexpensive, idempotent checks tolerate delayed capture and
     # GitHub schedule jitter. Kokoro only runs when a new verified original exists.
     - cron: '5,35 5 * * *'
       timezone: "America/Chicago"
-    - cron: '10 6,7,9,12 * * *'
+    - cron: '10 6,7,9,12,15,18,21 * * *'
       timezone: "America/Chicago"
   # Archive backfill fires once when this approved workflow file changes.
   # Same workflow identity preserves the verified OIDC upload security checks.

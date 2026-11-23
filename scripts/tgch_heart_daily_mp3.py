@@ -45,7 +45,7 @@ def render(text, output):
     generator = KPipeline(lang_code="a", device="cpu")
     parts = []
     count = 0
-    for _,_,clip in generator(text,voice="af_heart",speed=0.94,split_pattern=r'\n+'):
+    for _,_,clip in generator(text,voice="af_heart",speed=1.15,split_pattern=r'\n+'):
         if clip is not None and len(clip):
             parts.append(np.asarray(clip,dtype=np.float32))
             parts.append(np.zeros(5760,dtype=np.float32))
